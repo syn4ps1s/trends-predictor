@@ -1,6 +1,56 @@
 # Fashion Demand Predictor - Architecture Overview
 
-## High-Level Architecture
+## System Overview (Updated with Trend Research)
+
+**Fashion Demand Predictor** integra dos sistemas principales:
+
+1. **Trend Research & Generative Design** (NUEVO): Investigación de tendencias con IA y generación de diseños
+2. **Demand Forecasting & Optimization**: Pronóstico de demanda y optimización de inventario
+
+Estos sistemas se integran mediante **TrendDemandIntegrator** para crear planes de colección completos.
+
+## Complete System Architecture with Trend Research (NEW)
+
+### Workflow Completo: De Tendencias a Colección
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                  TREND RESEARCH SYSTEM (NEW)                       │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Global Trend Signals ──→ LLM Analysis ──→ TrendInsights         │
+│  (Social, Search, Runway)  (OpenAI/Claude)  (Color, Material...)  │
+│           ↓                                                        │
+│    Generative Studio ──→ Design Concepts ──→ Image Analysis       │
+│ (Stable Diffusion)    (Trend-based)      (ResNet, Attributes)   │
+│           ↓                                                        │
+│    Design Recommender ──→ Specific Recommendations               │
+│  (Materials, Colors)    (Price, Lead-time, Sustainability)       │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+              ↓
+┌────────────────────────────────────────────────────────────────────┐
+│           DEMAND FORECASTING SYSTEM                               │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Historical Data → Feature Engineering → DeepAR+ → Predictions   │
+│  + Seasonality, Macro, Store Features + Confidence Intervals     │
+│           ↓                                                        │
+│    MDP Optimizer → Optimal Inventory Decisions                   │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+              ↓
+┌────────────────────────────────────────────────────────────────────┐
+│      TREND-DEMAND INTEGRATION (TrendDemandIntegrator)             │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Match Designs ↔ Demand Forecast → Collection Plan              │
+│  (Specifications, Quantities, Schedule, Financial Projections)   │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+## High-Level Architecture (Demand Forecasting Pipeline)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -303,6 +353,195 @@ Trigger SNS Alert (if anomalies)
 API returns predictions
 ```
 
+## Trend Research Components (NEW)
+
+### Architecture Diagram
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│          TREND RESEARCHER (Main Orchestrator)                  │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  research_trends()                                            │
+│  ├─→ TrendAnalyzer (LLM-powered analysis)                    │
+│  └─→ TrendInsight[] objects                                  │
+│                                                                │
+│  generate_design_concepts()                                   │
+│  ├─→ GenerativeDesignStudio (Stable Diffusion/DALL-E)      │
+│  └─→ Design[] with generated images                         │
+│                                                                │
+│  recommend_designs()                                          │
+│  ├─→ DesignRecommender (Materials, Colors, Details)         │
+│  └─→ DesignRecommendation[]                                │
+│                                                                │
+│  seasonal_collection_plan()                                  │
+│  ├─→ Styles × Colors × Sizes                                │
+│  └─→ Complete CollectionPlan                                │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+        │              │                │               │
+        ▼              ▼                ▼               ▼
+    TrendAnalyzer  GenStudio      DesignRec      Integration
+```
+
+### 1. TrendAnalyzer (LLM-Powered Trend Analysis)
+
+**Purpose**: Synthesize global trend signals using LLMs
+
+**Data Sources**:
+- Social media (TikTok, Instagram, Twitter/X)
+- Search trends (Google Trends)
+- Fashion week reports
+- Influencer movements
+- Industry reports
+
+**Features**:
+- Multi-LLM support (OpenAI GPT-4, Anthropic Claude, Ollama)
+- Trend categories: color, material, silhouette, design, aesthetic
+- Regional variations
+- Confidence scoring (0-1)
+- Peak date prediction
+- Growth rate calculation
+
+**Output**: `TrendInsight` objects
+
+### 2. GenerativeDesignStudio (AI Image Generation)
+
+**Purpose**: Generate new design images based on trend insights
+
+**Supported Models**:
+- **Stable Diffusion v2.1** (Local, GPU-optimized, free)
+- **DALL-E 3** (Cloud-based, high quality)
+- **Custom fine-tuned models** (Brand-specific)
+
+**Pipeline**:
+```
+Trend Insights + Design Prompt
+       ↓
+Enhanced Fashion Prompt
+       ↓
+Image Generation (Stable Diffusion/DALL-E)
+       ↓
+Generated Image
+       ↓
+Design Analysis (ResNet + Vision Transformers)
+       ↓
+Design Attributes (Color, Silhouette, Complexity, etc.)
+```
+
+**Design Analysis Output**:
+- Color palette (primary, secondary, harmony)
+- Silhouette classification
+- Material appearance estimation
+- Design complexity score (0-1)
+- Uniqueness score (0-1)
+- Fashion suitability rating (0-1)
+- Styling recommendations
+
+### 3. DesignRecommender (Material Science & Color Psychology)
+
+**Purpose**: Recommend specific materials, colors, and finishing details
+
+**Components**:
+
+1. **Material Database** (6+ specifications):
+   - Organic cotton, recycled polyester, linen, silk, wool, blends
+   - Properties: GSM, weight, sustainability, cost, lead time, care
+   - Performance ratings and luxury positioning
+
+2. **Color Psychology**:
+   - Psychological impact (calm, energetic, luxurious, etc.)
+   - Age group appeal
+   - Versatility scoring
+   - Trending assessment
+
+3. **Silhouette Recommendations**:
+   - Seasonal fit scoring
+   - Demographic matching
+   - Trend alignment
+
+4. **Finishing Details**:
+   - Buttons, zippers, closures
+   - Seaming techniques (French seams, flat seams, etc.)
+   - Label design and sustainability
+
+5. **Pricing Strategy**:
+   - Material cost analysis
+   - Design complexity multipliers
+   - Brand positioning factors
+   - Margin optimization
+
+6. **Sustainability Assessment**:
+   - Material sustainability scores
+   - Design longevity
+   - Recommended certifications (GOTS, Fair Trade, etc.)
+   - Supply chain recommendations
+
+### 4. TrendDemandIntegrator (Bridge to Forecasting)
+
+**Purpose**: Connect trend research with demand predictions
+
+**Integration Points**:
+```
+TrendInsights + DesignConcepts
+       ↓
+DeepAR+ Demand Forecast
+       ↓
+Match Designs ↔ Demand
+       ↓
+MDP Inventory Optimization
+       ↓
+Complete Collection Plan
+```
+
+**Collection Plan Output**:
+- Design specifications (color, material, silhouette, details)
+- Predicted demand per design (units)
+- Production quantities (optimized via MDP)
+- Production schedule (with key dates)
+- Financial projections (revenue, margin, cost)
+- Risk assessment (confidence by design)
+- Marketing strategy recommendations
+
+## Trend Research Data Classes
+
+### TrendInsight
+```python
+@dataclass
+class TrendInsight:
+    trend_name: str                    # e.g., "Sage Green"
+    category: str                      # color, material, silhouette, design
+    confidence_score: float            # 0-1
+    emergence_date: datetime
+    peak_date: datetime                # Predicted peak
+    regions: List[str]                 # Geographic regions
+    age_groups: List[str]              # Target demographics
+    description: str
+    related_keywords: List[str]
+    growth_rate: float                 # Month-over-month %
+    source_signals: Dict[str, float]   # Signal sources & strength
+```
+
+### DesignRecommendation
+```python
+@dataclass
+class DesignRecommendation:
+    product_id: str
+    category: str                      # casual, formal, sportswear, etc.
+    design_description: str
+    primary_color: str
+    secondary_colors: List[str]
+    material: str
+    material_blend: Dict[str, float]   # e.g., {'cotton': 0.7, 'silk': 0.3}
+    silhouette: str
+    trend_drivers: List[str]
+    predicted_demand: float            # Units
+    confidence: float                  # 0-1
+    lead_time_days: int
+    target_price: float
+    estimated_margin: float            # 0-1, typically 0.55
+```
+
 ## Configuration Files
 
 ### `config/config.yaml`
@@ -338,18 +577,53 @@ API returns predictions
 
 ## Future Enhancements
 
-1. **Graph Neural Networks**: Model store relationships
-2. **Attention Mechanisms**: Improved temporal modeling
-3. **AutoML**: Automated hyperparameter tuning
-4. **Real-time Data Integration**: Live collection launches
-5. **Causal Inference**: Quantify campaign impacts
-6. **Hierarchical Forecasting**: Multi-level reconciliation
-7. **Transfer Learning**: Cross-store knowledge transfer
-8. **Online Learning**: Model adaptation with new data
+### Trend Research (Short-term)
+1. **Real API Integration**: Live social media, search trends, fashion week data
+2. **Fine-tuned Models**: Brand-specific Stable Diffusion models
+3. **Real-time Dashboard**: Trend monitoring and visualization
+4. **Design A/B Testing**: Validation framework for recommendations
+
+### Trend Research (Long-term)
+5. **Video Design Generation**: Create fashion film/video content
+6. **3D Model Generation**: CAD files for prototyping
+7. **AR Try-on Integration**: Virtual try-on for designs
+8. **Multi-brand Aggregation**: Cross-brand trend analysis
+
+### Forecasting & Optimization
+9. **Graph Neural Networks**: Model store relationships
+10. **Attention Mechanisms**: Improved temporal modeling
+11. **AutoML**: Automated hyperparameter tuning
+12. **Hierarchical Forecasting**: Multi-level reconciliation
+13. **Transfer Learning**: Cross-store knowledge transfer
+14. **Online Learning**: Model adaptation with new data
+
+### Supply Chain
+15. **Circular Fashion Tracking**: Recycling and sustainability
+16. **Supplier Integration**: Automated ordering and tracking
+17. **Real-time Demand Adjustment**: Live inventory management
 
 ## References
 
-- [DeepAR+](https://arxiv.org/abs/2003.01409)
+### Time Series Forecasting
+- [DeepAR+: Probabilistic Forecasting with Autoregressive Recurrent Networks](https://arxiv.org/abs/2003.01409)
 - [Temporal Fusion Transformers](https://arxiv.org/abs/1912.09363)
-- [Probabilistic Forecasting](https://arxiv.org/abs/1912.09363)
+- [Probabilistic Forecasting with Recurrent Neural Networks](https://arxiv.org/abs/1906.04397)
+
+### Generative AI
+- [Stable Diffusion](https://github.com/CompVis/stable-diffusion)
+- [Diffusers: State-of-the-art Diffusion Models](https://huggingface.co/docs/diffusers/)
+- [DALL-E 3](https://openai.com/dall-e-3)
+
+### Optimization
 - [MDP Optimization](https://en.wikipedia.org/wiki/Markov_decision_process)
+- [Value Iteration Algorithm](https://en.wikipedia.org/wiki/Value_iteration)
+
+### Large Language Models
+- [OpenAI GPT-4](https://openai.com/gpt-4)
+- [Anthropic Claude](https://www.anthropic.com/)
+- [Ollama: Local LLMs](https://ollama.ai)
+
+### Computer Vision
+- [ResNet: Deep Residual Learning](https://arxiv.org/abs/1512.03385)
+- [Vision Transformers](https://arxiv.org/abs/2010.11929)
+- [CLIP: Contrastive Learning for Image-Text Models](https://arxiv.org/abs/2103.14030)
