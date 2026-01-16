@@ -1,0 +1,213 @@
+# AWS-Specific Configuration
+
+aws:
+  credentials:
+    use_iam_role: true  # Recomendado en SageMaker
+    # Si no: especificar access_key_id y secret_access_key
+    profile: "default"
+
+  # Regions y endpoints
+  region: "us-east-1"
+  s3_region: "us-east-1"
+
+  # SageMaker IAM Role
+  sagemaker:
+    role_arn: "arn:aws:iam::YOUR_ACCOUNT:role/SageMakerExecutionRole"
+
+    # Training
+    training:
+      instance_type: "ml.p3.2xlarge"  # GPU compute
+      instance_count: 1
+      spot_training:
+        enabled: true
+        max_price: "0.30"  # En USD/hora (ajustar según región)
+
+    # HPO (Hyperparameter Optimization)
+    hpo:
+      enabled: false
+      max_jobs: 10
+      max_parallel_jobs: 2
+      objective_metric: "validation:rmse"
+      objective_direction: "Minimize"
+
+    # Batch Transform
+    batch_transform:
+      instance_type: "ml.m5.xlarge"
+      instance_count: 1
+      max_payload_mb: 100
+      max_concurrent_transforms: 10
+
+    # Real-time Endpoint
+    endpoint:
+      instance_type: "ml.m5.large"
+      initial_instance_count: 2  # Multi-AZ
+      autoscaling:
+        enabled: true
+        min_capacity: 1
+        max_capacity: 10
+        target_utilization: 0.7
+        scale_out_cooldown: 300
+        scale_in_cooldown: 300
+
+  # S3 Buckets
+  s3:
+    buckets:
+      raw_data: "fashion-predictor-raw-data"
+      training_data: "fashion-predictor-training"
+      models: "fashion-predictor-models"
+      predictions: "fashion-predictor-predictions"
+      artifacts: "fashion-predictor-artifacts"
+
+    # Lifecycle policies
+    lifecycle:
+      raw_data_expiration_days: 90
+      predictions_archive_days: 30
+
+  # DynamoDB Tables
+  dynamodb:
+    region: "us-east-1"
+
+    tables:
+      predictions:
+        name: "fashion-predictions-prod"
+        billing_mode: "PAY_PER_REQUEST"  # o "PROVISIONED"
+        global_secondary_indexes:
+          - name: "store-date-index"
+            partition_key: "store_id"
+            sort_key: "forecast_date"
+            projection: "ALL"
+          - name: "product-date-index"
+            partition_key: "product_id"
+            sort_key: "forecast_date"
+            projection: "ALL"
+        ttl:
+          enabled: true
+          attribute: "expires_at"
+
+      metadata:
+        name: "fashion-metadata"
+        billing_mode: "PROVISIONED"
+        rcu: 10
+        wcu: 10
+        global_secondary_indexes:
+          - name: "model-version-index"
+            partition_key: "model_id"
+            sort_key: "version"
+            projection: "KEYS_ONLY"
+
+  # Lambda Functions
+  lambda:
+    memory: 1024  # MB
+    timeout: 300  # segundos
+    ephemeral_storage: 10240  # MB (10GB)
+
+    layers:
+      - "arn:aws:lambda:us-east-1:ACCOUNT:layer:PyTorch-inference"
+      - "arn:aws:lambda:us-east-1:ACCOUNT:layer:Fashion-Predictor"
+
+    environment_variables:
+      SAGEMAKER_ENDPOINT_NAME: "fashion-predictor-endpoint-prod"
+      PREDICTIONS_TABLE: "fashion-predictions-prod"
+      METADATA_TABLE: "fashion-metadata"
+      LOG_LEVEL: "INFO"
+
+  # EventBridge Rules
+  eventbridge:
+    rules:
+      - name: "daily-forecast-rule"
+        schedule: "cron(0 2 * * ? *)"  # 2 AM UTC
+        description: "Run daily demand forecast"
+        targets:
+          - lambda_function: "fashion-predictor-forecast"
+            role_arn: "arn:aws:iam::YOUR_ACCOUNT:role/EventBridgeRole"
+
+      - name: "weekly-model-retraining"
+        schedule: "cron(0 4 ? * MON *)"  # Lunes 4 AM UTC
+        description: "Weekly model retraining with new data"
+        targets:
+          - sagemaker_training_job: "fashion-predictor-weekly-training"
+
+      - name: "store-inventory-optimization"
+        schedule: "cron(0 3 * * ? *)"  # 3 AM UTC
+        description: "MDP optimization for store inventories"
+        targets:
+          - lambda_function: "fashion-mdp-optimizer"
+
+  # CloudWatch Monitoring
+  cloudwatch:
+    namespaces:
+      - "FashionPredictor/Training"
+      - "FashionPredictor/Inference"
+      - "FashionPredictor/Data"
+
+    alarms:
+      - name: "ModelAccuracyDeviation"
+        metric_name: "rmse"
+        threshold: 0.15
+        comparison_operator: "GreaterThanThreshold"
+
+      - name: "EndpointLatency"
+        metric_name: "ModelLatency"
+        threshold: 1000  # milliseconds
+        comparison_operator: "GreaterThanThreshold"
+
+      - name: "InvocationErrors"
+        metric_name: "InvocationErrors"
+        threshold: 10
+        comparison_operator: "GreaterThanThreshold"
+
+    dashboards:
+      - name: "fashion-predictor-main"
+        widgets:
+          - metric: "ModelAccuracy"
+          - metric: "InferenceLatency"
+          - metric: "DataProcessingTime"
+          - metric: "CostEstimate"
+
+  # Backup & Disaster Recovery
+  backup:
+    enabled: true
+    backup_retention_days: 30
+    cross_region_backup: true
+    backup_region: "us-west-2"
+
+# VPC Configuration (si necesario)
+vpc:
+  enabled: false
+  security_groups:
+    - "sg-fashion-predictor-training"
+    - "sg-fashion-predictor-inference"
+  subnets:
+    - "subnet-training-1"
+    - "subnet-training-2"
+
+# Cost Optimization
+cost_optimization:
+  use_spot_instances: true
+  use_reserved_capacity: false
+  use_savings_plans: true
+  estimated_monthly_cost_usd: 500  # Estimado, ajustar según uso
+
+# Security
+security:
+  encryption:
+    s3:
+      enabled: true
+      kms_key_id: "arn:aws:kms:us-east-1:ACCOUNT:key/KEY_ID"
+    dynamodb:
+      enabled: true
+      kms_key_id: "arn:aws:kms:us-east-1:ACCOUNT:key/KEY_ID"
+
+  iam:
+    least_privilege: true
+    mfa_required: true
+
+  network:
+    vpc_only: false
+    allow_public_access: false
+    ip_whitelist:
+      - "0.0.0.0/0"  # Modificar según necesidad
+
+  secrets:
+    store_in_secrets_manager: true
+    rotation_days: 90

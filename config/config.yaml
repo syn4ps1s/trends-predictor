@@ -1,0 +1,221 @@
+# Fashion Demand Predictor - Main Configuration
+
+# ============================================================================
+# DATA GENERATION
+# ============================================================================
+data_generation:
+  num_stores: 100
+  num_products: 500
+  time_steps: 730  # 2 years of daily data
+  start_date: "2022-01-01"
+
+  # Estacionalidad
+  seasonality:
+    primary_period: 365  # Anual
+    secondary_period: 7   # Semanal
+    trend_type: "additive"  # o "multiplicative"
+
+  # Colecciones
+  collections:
+    frequency_months: 3  # Nueva colección cada 3 meses
+    ramp_up_days: 14    # Días de ramp-up después de lanzamiento
+    peak_multiplier: 2.5  # Multiplicador en pico
+    decay_rate: 0.15    # Tasa de decaimiento semanal post-pico
+
+  # Premisas Macro
+  macro:
+    gdp_growth: 0.03
+    inflation_rate: 0.02
+    consumer_confidence_volatility: 0.1
+    seasonal_economic_events:
+      - name: "Black Friday"
+        months: [11]
+        impact: 1.8
+      - name: "Holiday Season"
+        months: [11, 12]
+        impact: 1.6
+      - name: "Summer Sales"
+        months: [7, 8]
+        impact: 1.4
+
+# ============================================================================
+# FEATURE ENGINEERING
+# ============================================================================
+preprocessing:
+  # Normalizacion
+  normalize: true
+  normalization_method: "minmax"  # o "standard"
+
+  # Características de estacionalidad
+  seasonality_features:
+    use_fourier: true
+    fourier_terms: 10
+    use_seasonal_decomposition: true
+    decomp_method: "additive"
+
+  # Features macro
+  macro_features:
+    include_gdp_trend: true
+    include_inflation: true
+    include_confidence_index: true
+
+  # Features por tienda
+  store_features:
+    include_store_size: true
+    include_region: true
+    include_store_type: true  # flagship, outlet, online, etc
+    include_competitor_density: false
+
+  # Lags y rolling features
+  lags: [7, 14, 30, 90]
+  rolling_windows: [7, 30, 90]
+
+# ============================================================================
+# ResNet FEATURE EXTRACTOR
+# ============================================================================
+resnet:
+  enabled: true
+  architecture: "resnet50"
+  pretrained: true
+  input_size: [224, 224]
+  freeze_encoder: true
+  output_dim: 256
+  dropout: 0.2
+
+# ============================================================================
+# DEEPAR+ MODEL
+# ============================================================================
+deepar:
+  # Architecture
+  hidden_dim: 128
+  num_layers: 2
+  dropout: 0.2
+  use_attention: true
+
+  # Training
+  learning_rate: 0.001
+  batch_size: 64
+  epochs: 100
+  validation_split: 0.1
+  early_stopping: true
+  early_stopping_patience: 10
+
+  # Prediction
+  forecast_horizon: 30
+  context_length: 60
+  num_samples: 100  # Para intervalos de confianza
+
+  # Loss
+  loss_function: "neg_binomial"  # o "gaussian", "neg_binomial"
+  quantiles: [0.1, 0.5, 0.9]  # Percentiles para predicciones
+
+# ============================================================================
+# MDP (MARKOV DECISION PROCESS)
+# ============================================================================
+mdp:
+  enabled: true
+  states:
+    inventory_bins: [0, 10, 25, 50, 100, 500]  # Rangos de inventario
+    demand_states: ["low", "medium", "high"]
+
+  actions:
+    order_quantities: [0, 50, 100, 200, 500]
+
+  # Rewards
+  rewards:
+    stock_out_penalty: -100
+    holding_cost_per_unit: -0.5
+    order_cost_per_unit: -0.1
+    sales_reward_per_unit: 5.0
+
+  # MDP Solver
+  discount_factor: 0.95
+  solver: "value_iteration"  # o "policy_iteration"
+  max_iterations: 1000
+  tolerance: 1e-6
+
+# ============================================================================
+# SURROGATE MODELS
+# ============================================================================
+surrogate:
+  enabled: true
+  model_type: "gradient_boosting"  # o "random_forest", "neural_network"
+
+  gradient_boosting:
+    n_estimators: 200
+    max_depth: 5
+    learning_rate: 0.1
+
+  training:
+    use_training_data: false  # Entrenar con predicciones DeepAR+
+    sample_ratio: 0.2
+
+# ============================================================================
+# STORE-LEVEL AGGREGATION
+# ============================================================================
+store_aggregation:
+  # Desagregación: cómo distribuir predicciones agregadas a nivel tienda
+  method: "proportional"  # o "ml_based", "hierarchical"
+
+  # Baselines por tienda
+  use_store_baselines: true
+  baseline_window_days: 90
+
+  # Consideraciones
+  store_size_weight: 0.4
+  historical_share_weight: 0.6
+
+# ============================================================================
+# AWS CONFIGURATION
+# ============================================================================
+aws:
+  region: "us-east-1"
+
+  sagemaker:
+    enabled: true
+    instance_type: "ml.p3.2xlarge"  # GPU para entrenamiento
+    instance_count: 1
+    max_training_hours: 24
+
+    inference:
+      endpoint_instance_type: "ml.m5.large"
+      initial_instance_count: 1
+      auto_scaling:
+        enabled: true
+        min_capacity: 1
+        max_capacity: 5
+        target_utilization: 0.7
+
+  s3:
+    bucket: "fashion-predictor-data"
+    prefix: "models"
+    versioning: true
+
+  dynamodb:
+    table_predictions: "fashion-predictions"
+    table_metadata: "fashion-metadata"
+    ttl_days: 90
+
+  lambda:
+    timeout_seconds: 300
+    memory_mb: 1024
+
+# ============================================================================
+# LOGGING & MONITORING
+# ============================================================================
+logging:
+  level: "INFO"
+  log_file: "logs/predictor.log"
+
+  cloudwatch:
+    enabled: true
+    log_group: "/aws/sagemaker/fashion-predictor"
+
+# ============================================================================
+# EXPERIMENT TRACKING
+# ============================================================================
+experiment_tracking:
+  enabled: true
+  backend: "local"  # o "wandb", "mlflow"
+  log_metrics: true
+  log_models: true

@@ -1,0 +1,44 @@
+# Core Data Science
+numpy==1.26.3
+pandas==2.1.4
+scipy==1.12.0
+
+# Deep Learning & ML
+torch==2.1.2
+torchvision==0.16.2
+pytorch-lightning==2.1.3
+gluonts==0.14.4
+scikit-learn==1.3.2
+
+# AWS
+boto3==1.34.13
+sagemaker==2.206.1
+aws-cdk-lib==2.127.0
+
+# Feature Engineering & Signal Processing
+statsmodels==0.14.0
+scikit-signal==0.15.0
+tsfresh==0.20.0
+
+# Visualization
+matplotlib==3.8.3
+seaborn==0.13.0
+plotly==5.18.0
+
+# Config & Logging
+pyyaml==6.0.1
+python-dotenv==1.0.0
+loguru==0.7.2
+
+# Development & Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+black==23.12.1
+flake8==6.1.0
+mypy==1.7.1
+jupyter==1.0.0
+ipython==8.18.1
+
+# Utilities
+tqdm==4.66.1
+requests==2.31.0
