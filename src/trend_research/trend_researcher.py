@@ -472,15 +472,18 @@ class TrendResearcher:
         category = design_analysis.get("category", "")
 
         # Count matching records in forecast
-        matching_demand = len(
-            demand_forecast[
-                (demand_forecast.get("color", "") == color)
-                | (demand_forecast.get("category", "") == category)
-            ]
-        )
+        # Note: demand_forecast may not have 'color' or 'category' columns,
+        # so we use a simple scoring based on forecast values
+        if len(demand_forecast) == 0:
+            return 0.5  # Neutral score for empty forecast
 
-        score = min(1.0, matching_demand / max(len(demand_forecast), 1) * 2)
-        return score
+        # Score based on demand forecast variance and mean
+        demand_mean = demand_forecast.get("point_forecast", demand_forecast.iloc[:, 0]).mean()
+        demand_var = demand_forecast.get("point_forecast", demand_forecast.iloc[:, 0]).var()
+
+        # Design with high variance/demand opportunity gets higher score
+        score = min(1.0, (demand_mean + demand_var) / 1000.0)
+        return max(0.5, score)  # Ensure minimum baseline score
 
     def _estimate_demand_for_design(
         self, design_analysis: Dict, demand_forecast: pd.DataFrame
